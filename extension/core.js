@@ -20,6 +20,18 @@ const HORIZONS={
 "3y":{label:"3 years",mult:1,span:"week",days:3650,bars:260,profile:"investment",focus:["multi-year trend","fundamental durability","cycle resilience","drawdown history","structural growth"]},
 "5y":{label:"5+ years",mult:1,span:"week",days:5475,bars:390,profile:"investment",focus:["structural trend","fundamental durability","cycle resilience","long-run drawdowns","persistent growth"]}};
 function horizon(key){return HORIZONS[key]||HORIZONS["1w"]}
+function evidenceModel(raw={},metrics={},hp={profile:"swing"}){
+ const arr=x=>Array.isArray(x)?x:[],num=(o,keys)=>{for(const k of keys){const v=k.split(".").reduce((a,p)=>a?.[p],o);if(Number.isFinite(+v))return +v}return null},growth=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&b!==0?round((a/b-1)*100):null;
+ const quotes=arr(raw.quotes),trades=arr(raw.trades),news=arr(raw.news),si=arr(raw.shortInterest),fund=raw.fundamentals||{},actions=raw.corporateActions||{};
+ const q=quotes[0]||{},bid=num(q,["bid_price","bid.price","bid"]),ask=num(q,["ask_price","ask.price","ask"]),mid=bid&&ask?(bid+ask)/2:null,spread=mid?round((ask-bid)/mid*10000):null;
+ const inc=arr(fund.income),cash=arr(fund.cashFlow),bal=arr(fund.balanceSheet),rat=arr(fund.ratios);
+ const rev=inc.map(x=>num(x,["revenues.value","revenue","revenues","financials.income_statement.revenues.value"])).filter(Number.isFinite);
+ const ni=inc.map(x=>num(x,["net_income_loss.value","net_income","financials.income_statement.net_income_loss.value"])).filter(Number.isFinite);
+ const fcf=cash.map(x=>num(x,["free_cash_flow","net_cash_flow_from_operating_activities.value","financials.cash_flow_statement.net_cash_flow_from_operating_activities.value"])).filter(Number.isFinite);
+ const debt=bal.map(x=>num(x,["liabilities.value","total_liabilities","financials.balance_sheet.liabilities.value"])).filter(Number.isFinite);
+ const ratio=rat[0]||{};
+ return{profile:hp.profile,market:{last:metrics.last,changePct:metrics.changePct,rsi14:metrics.rsi14,trend20Pct:metrics.trend20Pct,annualizedVolPct:metrics.annualizedVolPct,rangePosition20:metrics.rangePosition20,volumeRatio5v20:metrics.volumeRatio5v20},execution:{quoteCount:quotes.length,tradeSampleCount:trades.length,bid,ask,spreadBps:spread},fundamentals:{periods:inc.length,revenueLatest:rev[0]??null,revenueGrowthPct:rev.length>1?growth(rev[0],rev[1]):null,netIncomeLatest:ni[0]??null,netIncomeGrowthPct:ni.length>1?growth(ni[0],ni[1]):null,cashFlowLatest:fcf[0]??null,cashFlowGrowthPct:fcf.length>1?growth(fcf[0],fcf[1]):null,liabilitiesLatest:debt[0]??null,pe:num(ratio,["price_to_earnings_ratio","pe_ratio"]),priceToBook:num(ratio,["price_to_book_ratio","pb_ratio"]),debtToEquity:num(ratio,["debt_to_equity_ratio"])},context:{newsItems:news.length,shortInterestPeriods:si.length,dividendRecords:arr(actions.dividends).length,splitRecords:arr(actions.splits).length},availability:{quotes:!raw.quotes?false:!raw.quotes._unavailable,trades:!raw.trades?false:!raw.trades._unavailable,company:!!raw.company&&!raw.company._unavailable,news:!!raw.news&&!raw.news._unavailable,fundamentals:!!raw.fundamentals,corporateActions:!!raw.corporateActions}};
+}
 function questions(h="1w"){const x=horizon(h),q={
 direction_bias:{type:"choice",instructions:"Using only supplied observed/calculated facts, identify the best-supported directional regime for the selected horizon. Use uncertain when evidence is insufficient or materially conflicting.",criteria:{rise:"Upward movement is best supported.",fall:"Downward movement is best supported.",sideways:"Range-bound/directionless movement is best supported.",uncertain:"Evidence is insufficient or materially conflicting."}},
 rise_supported:{type:"noul",instructions:"Does the supplied evidence support upward price movement over the selected horizon?"},
@@ -38,4 +50,4 @@ trade_plan_quality:{type:"score",instructions:"If entry/stop/target are supplied
 const suffix=` Evaluate specifically for a ${x.label} holding horizon. Prioritize: ${x.focus.join(", ")}.`;for(const v of Object.values(q))v.instructions+=suffix;
 if(x.profile==="investment"){delete q.breakout_supported;delete q.mean_reversion_supported;q.durable_growth={type:"noul",instructions:"Does supplied long-horizon evidence support durable growth or appreciation rather than a temporary move?"+suffix};q.long_horizon_resilience={type:"score",instructions:"Judge resilience of the long-horizon thesis to volatility, drawdowns, changing regimes and supplied fundamental/event evidence."+suffix,criteria:["Very weak resilience.","Weak resilience.","Moderate resilience.","Strong resilience.","Very strong resilience."]}}
 return q}
-return{QUESTION_PACK_VERSION,HORIZONS,horizon,ticker,features,questions,round}})();
+return{QUESTION_PACK_VERSION,HORIZONS,horizon,ticker,features,evidenceModel,questions,round}})();
