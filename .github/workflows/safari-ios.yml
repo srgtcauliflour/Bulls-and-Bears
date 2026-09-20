@@ -5,9 +5,13 @@ on:
     paths: ["extension/**", ".github/workflows/safari-ios.yml"]
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Xcode 27 and iOS 27 SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version | grep '^27\\.'
       - name: Validate shared JavaScript
         run: |
           node --check extension/core.js
