@@ -1,0 +1,46 @@
+name: Safari iOS unsigned IPA
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["extension/**", ".github/workflows/safari-ios.yml"]
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shared JavaScript
+        run: |
+          node --check extension/core.js
+          node --check extension/popup.js
+      - name: Package Safari Web Extension
+        run: |
+          xcrun safari-web-extension-packager extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.bullsandbears --swift --ios-only --copy-resources --no-open --no-prompt --force
+          find safari-generated -maxdepth 3 -type f | sort
+      - name: Discover project and iOS scheme
+        id: discover
+        shell: bash
+        run: |
+          PROJECT="$(find safari-generated -name '*.xcodeproj' -print -quit)"
+          test -n "$PROJECT"
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          xcodebuild -project "$PROJECT" -list
+          SCHEME="$(xcodebuild -project "$PROJECT" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("project",{}).get("schemes",[]); print(next((x for x in s if "iOS" in x), s[0] if s else ""))')"
+          test -n "$SCHEME"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+      - name: Build unsigned iOS app
+        run: |
+          rm -rf "$RUNNER_TEMP/bb-build"
+          xcodebuild -project "${{ steps.discover.outputs.project }}" -scheme "${{ steps.discover.outputs.scheme }}" -configuration Release -sdk iphoneos -derivedDataPath "$RUNNER_TEMP/bb-build" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          APP="$(find "$RUNNER_TEMP/bb-build/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$APP"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -qry "$GITHUB_WORKSPACE/BullsAndBears-Safari-v0.1-unsigned.ipa" Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BullsAndBears-Safari-v0.1-unsigned
+          path: BullsAndBears-Safari-v0.1-unsigned.ipa
+          if-no-files-found: error
