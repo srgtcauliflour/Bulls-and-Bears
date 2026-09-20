@@ -45,11 +45,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          qlmanage -t -s 1024 -o /tmp extension/assets/brand-logo.svg >/dev/null 2>&1
-          SRC="/tmp/brand-logo.svg.png"
-          test -s "$SRC"
-          for size in 16 32 48 128; do
-            sips -z "$size" "$size" "$SRC" --out "extension/assets/icon-$size.png" >/dev/null
+          SRC="extension/assets/bulls-and-bears-logo.jpg"
+          file "$SRC"
+          sips -g pixelWidth -g pixelHeight "$SRC"
+          for size in 16 32 48 128 1024; do
+            sips -s format png -z "$size" "$size" "$SRC" --out "extension/assets/icon-$size.png" >/dev/null
           done
           python3 - <<'PY'
           import json
@@ -60,7 +60,7 @@ jobs:
           m.setdefault("action",{})["default_icon"]=icons
           with open(p,"w") as f:json.dump(m,f,indent=2)
           PY
-          for f in extension/assets/icon-*.png; do
+          for f in extension/assets/icon-16.png extension/assets/icon-32.png extension/assets/icon-48.png extension/assets/icon-128.png extension/assets/icon-1024.png; do
             test "$(xxd -p -l 8 "$f")" = "89504e470d0a1a0a"
           done
 
@@ -79,6 +79,28 @@ jobs:
           SCHEME="$(xcodebuild -project "$PROJECT" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("project",{}).get("schemes",[]); print(next((x for x in s if "iOS" in x), s[0] if s else ""))')"
           test -n "$SCHEME"
           echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+      - name: Install branded native app icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="${{ steps.discover.outputs.project }}"
+          ROOT="$(dirname "$PROJECT")"
+          APPICON="$(find "$ROOT" -type d -name 'AppIcon.appiconset' -print -quit || true)"
+          if [ -n "$APPICON" ]; then
+            cp extension/assets/icon-1024.png "$APPICON/BullsAndBears-1024.png"
+            python3 - "$APPICON" <<'PY'
+          import json,sys,pathlib
+          p=pathlib.Path(sys.argv[1]); f=p/"Contents.json"
+          d=json.loads(f.read_text())
+          for image in d.get("images",[]):
+              if image.get("idiom")=="universal" and image.get("size")=="1024x1024":
+                  image["filename"]="BullsAndBears-1024.png"
+          f.write_text(json.dumps(d,indent=2))
+          PY
+          else
+            echo "::warning::No AppIcon.appiconset found; Safari converter controls the container icon."
+          fi
+
       - name: Build unsigned iOS app
         run: |
           rm -rf "$RUNNER_TEMP/bb-build"
