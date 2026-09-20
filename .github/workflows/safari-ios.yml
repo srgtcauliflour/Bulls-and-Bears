@@ -56,14 +56,6 @@ jobs:
           SCHEME="$(xcodebuild -project "$PROJECT" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("project",{}).get("schemes",[]); print(next((x for x in s if "iOS" in x), s[0] if s else ""))')"
           test -n "$SCHEME"
           echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
-      - name: Prepare Bulls and Bears iOS app icon
-        shell: bash
-        run: |
-          ICON_SRC="$GITHUB_WORKSPACE/extension/assets/app-icon.jpg"
-          test -f "$ICON_SRC" || { echo "::error::Missing $ICON_SRC"; exit 1; }
-          mkdir -p "$RUNNER_TEMP/bb-branding"
-          sips -s format png -z 1024 1024 "$ICON_SRC" --out "$RUNNER_TEMP/bb-branding/AppIcon-1024.png" >/dev/null
-          test -s "$RUNNER_TEMP/bb-branding/AppIcon-1024.png"
       - name: Build unsigned iOS app
         run: |
           rm -rf "$RUNNER_TEMP/bb-build"
