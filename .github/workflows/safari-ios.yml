@@ -53,6 +53,23 @@ jobs:
           SCHEME="$(xcodebuild -project "$PROJECT" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("project",{}).get("schemes",[]); print(next((x for x in s if "iOS" in x), s[0] if s else ""))')"
           test -n "$SCHEME"
           echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+      - name: Apply Bulls and Bears iOS app icon
+        shell: bash
+        run: |
+          PROJECT_DIR="$(dirname "${{ steps.discover.outputs.project }}")"
+          ICON_SRC="$GITHUB_WORKSPACE/extension/assets/app-icon.jpg"
+          APPICON_DIR="$(find "$PROJECT_DIR" -type d -name 'AppIcon.appiconset' -print -quit)"
+          if [ -n "$APPICON_DIR" ]; then
+            sips -s format png -z 1024 1024 "$ICON_SRC" --out "$APPICON_DIR/AppIcon-1024.png" >/dev/null
+            python3 - "$APPICON_DIR" <<'PY'
+import json,sys,os
+p=sys.argv[1]
+data={"images":[{"filename":"AppIcon-1024.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}
+open(os.path.join(p,"Contents.json"),"w").write(json.dumps(data))
+PY
+          else
+            echo "::warning::Generated project did not expose AppIcon.appiconset"
+          fi
       - name: Build unsigned iOS app
         run: |
           rm -rf "$RUNNER_TEMP/bb-build"
