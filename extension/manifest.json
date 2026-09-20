@@ -1,1 +1,29 @@
-{"manifest_version":3,"name":"Bulls&Bears","version":"0.2.1","description":"Market data and TypeSafe Jev decision support for traders.","permissions":["storage"],"host_permissions":["https://api.massive.com/*","https://api.typesafe.ai/*"],"action":{"default_title":"Bulls&Bears","default_popup":"popup.html"}}
+{
+  "manifest_version": 3,
+  "name": "Bulls&Bears",
+  "version": "0.2.1",
+  "description": "Market data and TypeSafe Jev decision support for traders.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.massive.com/*",
+    "https://api.typesafe.ai/*"
+  ],
+  "action": {
+    "default_title": "Bulls&Bears",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/app-icon.jpg",
+      "32": "assets/app-icon.jpg",
+      "48": "assets/app-icon.jpg",
+      "128": "assets/app-icon.jpg"
+    }
+  },
+  "icons": {
+    "16": "assets/app-icon.jpg",
+    "32": "assets/app-icon.jpg",
+    "48": "assets/app-icon.jpg",
+    "128": "assets/app-icon.jpg"
+  }
+}
