@@ -1,0 +1,1 @@
+/* Future Page Intelligence boundary. Intentionally not registered in manifest v0.2.1. Page reading will require explicit permission/user action. Extract candidate facts with provenance; never send an unfiltered page to Jev. */ globalThis.BBPageIntelligence={version:"0.0-design",enabled:false};

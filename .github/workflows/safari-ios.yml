@@ -1,0 +1,121 @@
+name: Safari iOS unsigned IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "feat/refactor-safari-v0.1"]
+    paths: ["extension/**", ".github/workflows/safari-ios.yml"]
+  pull_request:
+    paths: ["extension/**", ".github/workflows/safari-ios.yml"]
+jobs:
+  build:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Xcode 27 toolchain
+        shell: bash
+        run: |
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1 {print $2}')"
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "Xcode: $XCODE_VERSION"
+          echo "iPhoneOS SDK: $SDK_VERSION"
+          [[ "$XCODE_VERSION" == 27.* ]] || { echo "::error::Xcode 27 is required"; exit 1; }
+          test -n "$SDK_VERSION" || { echo "::error::No iPhoneOS SDK is available"; exit 1; }
+      - name: Validate shared JavaScript
+        run: |
+          node --check extension/core.js
+          node --check extension/popup.js
+      - name: Select Safari packaging tool
+        id: safari_tool
+        shell: bash
+        run: |
+          echo "Active Xcode:"
+          xcodebuild -version
+          if xcrun --find safari-web-extension-packager >/dev/null 2>&1; then
+            TOOL=safari-web-extension-packager
+          elif xcrun --find safari-web-extension-converter >/dev/null 2>&1; then
+            TOOL=safari-web-extension-converter
+          else
+            echo "::error::Neither Safari Web Extension packager nor legacy converter is installed in the active Xcode."
+            ls -1 /Applications | grep '^Xcode' || true
+            exit 1
+          fi
+          echo "Using $TOOL"
+          echo "tool=$TOOL" >> "$GITHUB_OUTPUT"
+      - name: Create branded PNG icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="extension/assets/bulls-and-bears-logo.jpg"
+          file "$SRC"
+          sips -g pixelWidth -g pixelHeight "$SRC"
+          for size in 16 32 48 128 1024; do
+            sips -s format png -z "$size" "$size" "$SRC" --out "extension/assets/icon-$size.png" >/dev/null
+          done
+          python3 - <<'PY'
+          import json
+          p="extension/manifest.json"
+          with open(p) as f:m=json.load(f)
+          icons={s:f"assets/icon-{s}.png" for s in ("16","32","48","128")}
+          m["icons"]=icons
+          m.setdefault("action",{})["default_icon"]=icons
+          with open(p,"w") as f:json.dump(m,f,indent=2)
+          PY
+          for f in extension/assets/icon-16.png extension/assets/icon-32.png extension/assets/icon-48.png extension/assets/icon-128.png extension/assets/icon-1024.png; do
+            test "$(xxd -p -l 8 "$f")" = "89504e470d0a1a0a"
+          done
+
+      - name: Package Safari Web Extension
+        run: |
+          xcrun "${{ steps.safari_tool.outputs.tool }}" extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.BullsAndBears --swift --ios-only --copy-resources --no-open --no-prompt --force
+          find safari-generated -maxdepth 3 -type f | sort
+      - name: Discover project and iOS scheme
+        id: discover
+        shell: bash
+        run: |
+          PROJECT="$(find safari-generated -name '*.xcodeproj' -print -quit)"
+          test -n "$PROJECT"
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          xcodebuild -project "$PROJECT" -list
+          SCHEME="$(xcodebuild -project "$PROJECT" -list -json | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("project",{}).get("schemes",[]); print(next((x for x in s if "iOS" in x), s[0] if s else ""))')"
+          test -n "$SCHEME"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+      - name: Install branded native app icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="${{ steps.discover.outputs.project }}"
+          ROOT="$(dirname "$PROJECT")"
+          APPICON="$(find "$ROOT" -type d -name 'AppIcon.appiconset' -print -quit || true)"
+          if [ -n "$APPICON" ]; then
+            cp extension/assets/icon-1024.png "$APPICON/BullsAndBears-1024.png"
+            python3 - "$APPICON" <<'PY'
+          import json,sys,pathlib
+          p=pathlib.Path(sys.argv[1]); f=p/"Contents.json"
+          d=json.loads(f.read_text())
+          for image in d.get("images",[]):
+              if image.get("idiom")=="universal" and image.get("size")=="1024x1024":
+                  image["filename"]="BullsAndBears-1024.png"
+          f.write_text(json.dumps(d,indent=2))
+          PY
+          else
+            echo "::warning::No AppIcon.appiconset found; Safari converter controls the container icon."
+          fi
+
+      - name: Build unsigned iOS app
+        run: |
+          rm -rf "$RUNNER_TEMP/bb-build"
+          xcodebuild -project "${{ steps.discover.outputs.project }}" -scheme "${{ steps.discover.outputs.scheme }}" -configuration Release -sdk iphoneos -derivedDataPath "$RUNNER_TEMP/bb-build" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          APP="$(find "$RUNNER_TEMP/bb-build/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$APP"
+          rm -rf "$RUNNER_TEMP/Payload"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -qry "$GITHUB_WORKSPACE/BullsAndBears-Safari-v0.1-unsigned.ipa" Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BullsAndBears-Safari-v0.1-unsigned
+          path: BullsAndBears-Safari-v0.1-unsigned.ipa
+          if-no-files-found: error
