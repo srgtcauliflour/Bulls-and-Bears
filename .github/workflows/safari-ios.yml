@@ -40,7 +40,7 @@ jobs:
           echo "tool=$TOOL" >> "$GITHUB_OUTPUT"
       - name: Package Safari Web Extension
         run: |
-          xcrun "${{ steps.safari_tool.outputs.tool }}" extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.bullsandbears --swift --ios-only --copy-resources --no-open --no-prompt --force
+          xcrun "${{ steps.safari_tool.outputs.tool }}" extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.BullsAndBears --swift --ios-only --copy-resources --no-open --no-prompt --force
           find safari-generated -maxdepth 3 -type f | sort
       - name: Discover project and iOS scheme
         id: discover
