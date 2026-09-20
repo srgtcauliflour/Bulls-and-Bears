@@ -41,31 +41,6 @@ jobs:
           fi
           echo "Using $TOOL"
           echo "tool=$TOOL" >> "$GITHUB_OUTPUT"
-      - name: Prepare real PNG branding for Safari
-        shell: bash
-        run: |
-          set -euo pipefail
-          brew list imagemagick >/dev/null 2>&1 || brew install imagemagick
-          magick extension/assets/bulls-and-bears-logo.jpg -auto-orient -background '#081220' -gravity center -resize '900x900>' -extent 1024x1024 extension/assets/bulls-and-bears-logo.png
-          for size in 16 32 48 128; do
-            magick extension/assets/bulls-and-bears-logo.png -resize "${size}x${size}" "extension/assets/icon-${size}.png"
-          done
-          python3 - <<'PY'
-          import json
-          p="extension/manifest.json"
-          with open(p) as f: m=json.load(f)
-          icons={s:f"assets/icon-{s}.png" for s in ("16","32","48","128")}
-          m["icons"]=icons
-          m.setdefault("action",{})["default_icon"]=icons
-          with open(p,"w") as f: json.dump(m,f,indent=2)
-          p="extension/popup.html"
-          with open(p) as f: html=f.read()
-          html=html.replace("assets/bulls-and-bears-logo.jpg","assets/bulls-and-bears-logo.png")
-          with open(p,"w") as f: f.write(html)
-          PY
-          file extension/assets/*.png
-          test "$(xxd -p -l 8 extension/assets/bulls-and-bears-logo.png)" = "89504e470d0a1a0a"
-
       - name: Package Safari Web Extension
         run: |
           xcrun "${{ steps.safari_tool.outputs.tool }}" extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.BullsAndBears --swift --ios-only --copy-resources --no-open --no-prompt --force
