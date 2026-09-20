@@ -12,9 +12,26 @@ jobs:
         run: |
           node --check extension/core.js
           node --check extension/popup.js
+      - name: Select Safari packaging tool
+        id: safari_tool
+        shell: bash
+        run: |
+          echo "Active Xcode:"
+          xcodebuild -version
+          if xcrun --find safari-web-extension-packager >/dev/null 2>&1; then
+            TOOL=safari-web-extension-packager
+          elif xcrun --find safari-web-extension-converter >/dev/null 2>&1; then
+            TOOL=safari-web-extension-converter
+          else
+            echo "::error::Neither Safari Web Extension packager nor legacy converter is installed in the active Xcode."
+            ls -1 /Applications | grep '^Xcode' || true
+            exit 1
+          fi
+          echo "Using $TOOL"
+          echo "tool=$TOOL" >> "$GITHUB_OUTPUT"
       - name: Package Safari Web Extension
         run: |
-          xcrun safari-web-extension-packager extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.bullsandbears --swift --ios-only --copy-resources --no-open --no-prompt --force
+          xcrun "${{ steps.safari_tool.outputs.tool }}" extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.bullsandbears --swift --ios-only --copy-resources --no-open --no-prompt --force
           find safari-generated -maxdepth 3 -type f | sort
       - name: Discover project and iOS scheme
         id: discover
@@ -36,6 +53,7 @@ jobs:
         run: |
           APP="$(find "$RUNNER_TEMP/bb-build/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
           test -n "$APP"
+          rm -rf "$RUNNER_TEMP/Payload"
           mkdir -p "$RUNNER_TEMP/Payload"
           cp -R "$APP" "$RUNNER_TEMP/Payload/"
           (cd "$RUNNER_TEMP" && zip -qry "$GITHUB_WORKSPACE/BullsAndBears-Safari-v0.1-unsigned.ipa" Payload)
