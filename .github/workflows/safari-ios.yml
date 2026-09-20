@@ -64,12 +64,7 @@ jobs:
           APPICON_DIR="$(find "$PROJECT_DIR" -type d -name 'AppIcon.appiconset' -print -quit)"
           if [ -n "$APPICON_DIR" ]; then
             sips -s format png -z 1024 1024 "$ICON_SRC" --out "$APPICON_DIR/AppIcon-1024.png" >/dev/null
-            python3 - "$APPICON_DIR" <<'PY'
-import json,sys,os
-p=sys.argv[1]
-data={"images":[{"filename":"AppIcon-1024.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}
-open(os.path.join(p,"Contents.json"),"w").write(json.dumps(data))
-PY
+            python3 -c 'import json,sys,os; p=sys.argv[1]; data={"images":[{"filename":"AppIcon-1024.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}; open(os.path.join(p,"Contents.json"),"w").write(json.dumps(data))' "$APPICON_DIR"
           else
             echo "::warning::Generated project did not expose AppIcon.appiconset"
           fi
