@@ -41,19 +41,16 @@ jobs:
           fi
           echo "Using $TOOL"
           echo "tool=$TOOL" >> "$GITHUB_OUTPUT"
-      - name: Create valid PNG icons from bundled logo
+      - name: Create branded PNG icons
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import base64, pathlib
-          # Small valid PNG fallback used for Safari/Xcode packaging until the
-          # full-resolution brand PNG is committed as a binary repository asset.
-          png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAC0lEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvg0QAAABJRU5ErkJggg==")
-          a=pathlib.Path("extension/assets"); a.mkdir(parents=True,exist_ok=True)
-          for n in (16,32,48,128):
-              (a/f"icon-{n}.png").write_bytes(png)
-          PY
+          qlmanage -t -s 1024 -o /tmp extension/assets/brand-logo.svg >/dev/null 2>&1
+          SRC="/tmp/brand-logo.svg.png"
+          test -s "$SRC"
+          for size in 16 32 48 128; do
+            sips -z "$size" "$size" "$SRC" --out "extension/assets/icon-$size.png" >/dev/null
+          done
           python3 - <<'PY'
           import json
           p="extension/manifest.json"
@@ -63,7 +60,9 @@ jobs:
           m.setdefault("action",{})["default_icon"]=icons
           with open(p,"w") as f:json.dump(m,f,indent=2)
           PY
-          test "$(xxd -p -l 8 extension/assets/icon-128.png)" = "89504e470d0a1a0a"
+          for f in extension/assets/icon-*.png; do
+            test "$(xxd -p -l 8 "$f")" = "89504e470d0a1a0a"
+          done
 
       - name: Package Safari Web Extension
         run: |
