@@ -41,6 +41,30 @@ jobs:
           fi
           echo "Using $TOOL"
           echo "tool=$TOOL" >> "$GITHUB_OUTPUT"
+      - name: Create valid PNG icons from bundled logo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, pathlib
+          # Small valid PNG fallback used for Safari/Xcode packaging until the
+          # full-resolution brand PNG is committed as a binary repository asset.
+          png=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAC0lEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvg0QAAABJRU5ErkJggg==")
+          a=pathlib.Path("extension/assets"); a.mkdir(parents=True,exist_ok=True)
+          for n in (16,32,48,128):
+              (a/f"icon-{n}.png").write_bytes(png)
+          PY
+          python3 - <<'PY'
+          import json
+          p="extension/manifest.json"
+          with open(p) as f:m=json.load(f)
+          icons={s:f"assets/icon-{s}.png" for s in ("16","32","48","128")}
+          m["icons"]=icons
+          m.setdefault("action",{})["default_icon"]=icons
+          with open(p,"w") as f:json.dump(m,f,indent=2)
+          PY
+          test "$(xxd -p -l 8 extension/assets/icon-128.png)" = "89504e470d0a1a0a"
+
       - name: Package Safari Web Extension
         run: |
           xcrun "${{ steps.safari_tool.outputs.tool }}" extension --project-location "$PWD/safari-generated" --app-name BullsAndBears --bundle-identifier com.srgtcauliflour.BullsAndBears --swift --ios-only --copy-resources --no-open --no-prompt --force
